@@ -1,21 +1,9 @@
 
 library(ggtree)
 library(ape)
-library(fastcluster)
-library(inline)
 library(parallel)
 
 setwd("/home/xhonji01/Projekty/MG/feature_select")
-
-features <- read.csv("features.csv")
-col_names <- names(features)
-
-if (length(col_names) < 2) {
-  stop("Input CSV file must contain at least two columns.")
-}
-if (!"Organism" %in% col_names) {
-  stop("Missing Organism column in input CSV file.")
-}
 
 #' One point of joint distribution of the random variables associated with two 
 #' clusterings.
@@ -91,6 +79,8 @@ vi <- function(a, b, n) {
 #' @return Distance matrix.
 #' 
 cos_dist <- function(x) {
+  library(inline)
+  
   if (!is.matrix(x)) {
     stop("Matrix expected.")
   }
@@ -124,36 +114,75 @@ cos_dist <- function(x) {
   return(as.dist(cos_dist_c(x)))
 }
 
-
-# Pick reference organism marking from feature table
-org <- factor(features$Organism)
-org_ann <- data.frame(id = 1:length(org), group = org)
-
-# Consider all other columns to represent various features
-feature_names <- col_names[col_names != "Organism"]
-
-for (m in 1:length(feature_names)) {
-  for (names in combn(feature_names, m, simplify = FALSE)) {
-    sel_features <- as.matrix(features[ , names])
-    
+#' Select best features for hierarchical clustering.
+#' 
+#' @param file Input CSV file with features and reference marking.
+#' @param min_features Minimal number of features.
+#' @param max_features Maximal number of features.
+#'
+feature_select <- function(file, min_features = 3, max_features = NULL) {
+  features <- read.csv(file)
+  col_names <- names(features)
+  
+  if (length(col_names) < 2) {
+    stop("Input CSV file must contain at least two columns.")
+  }
+  if (!"Organism" %in% col_names) {
+    stop("Missing Organism column in input CSV file.")
+  }
+  # Pick reference organism marking from feature table
+  org <- factor(features$Organism)
+  org_ann <- data.frame(id = 1:length(org), group = org)
+  
+  # Consider all other columns to represent various features
+  feature_names <- col_names[col_names != "Organism"]
+  
+  if (length(feature_names) < min_features) {
+    stop("Not enough features.")
+  }
+  if (is.null(max_features)) {
+    max_features <- length(feature_names)
+  }
+  if (max_features < min_features) {
+    stop("Invalid specification of maximum and minimum features.")
+  }
+  
+  # Generate all feature combinations
+  max_features <- min(max_features, length(feature_names))
+  feature_comb <- unlist(lapply(min_features:max_features, combn,
+                                x = feature_names, simplify = FALSE),
+                         recursive = FALSE)
+  
+  # n_cores <- detectCores()
+  # cl <- makeCluster(n_cores, outfile = "");
+  # clusterExport(cl, c("features", "org", "cos_dist", "vi", "vi_H", "vi_I", "vi_P"))
+  
+  res <- lapply(feature_comb, function(names) {
+    library(fastcluster)
     cat(names, "\n")
+    
+    sel_features <- as.matrix(features[ , names])
     
     # Euclidean
     dist <- dist(sel_features, method = "euclidean")
     hc <- hclust(dist, method = "average")
     cls <- factor(cutree(hc, k = length(levels(org))))
-    sim <- vi(org, cls, length(org))
-    cat("Euclidean:", sim, "\n")
+    euc_sim <- vi(org, cls, length(org))
     
     # Cosine
     dist <- cos_dist(sel_features)
     hc <- hclust(dist, method = "average")
     cls <- factor(cutree(hc, k = length(levels(org))))
-    sim <- vi(org, cls, length(org))
-    cat("Cosine:", sim, "\n")
-  }
+    cos_sim <- vi(org, cls, length(org))
+    
+    cat("Euclidean:", euc_sim, "Cosine:", cos_sim, "\n")
+    
+    return(c(euc_sim, cos_sim))
+  })
+  
+  resm <- matrix(unlist(x), nrow = 2)
+  
+  # pdf("out/tree.pdf", 8, 15)
+  # print(ggtree(as.phylo(hc), aes(color = group), branch.length = "none") %<+% org_ann + theme(legend.position = "right"))
+  # dev.off()
 }
-
-# pdf("out/tree.pdf", 8, 15)
-# print(ggtree(as.phylo(hc), aes(color = group), branch.length = "none") %<+% org_ann + theme(legend.position = "right"))
-# dev.off()
