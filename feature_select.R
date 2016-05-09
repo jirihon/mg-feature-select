@@ -3,6 +3,7 @@ library(ggtree)
 library(ape)
 library(fastcluster)
 library(inline)
+library(parallel)
 
 setwd("/home/xhonji01/Projekty/MG/feature_select")
 
@@ -112,7 +113,11 @@ cos_dist <- function(x) {
         sum_a2 += a * a;
         sum_b2 += b * b;
       }
-      dm(i, j) = 1 - (sum_ab / std::sqrt(sum_a2 * sum_b2));
+      double sum_a2b2 = sum_a2 * sum_b2;
+      if (sum_a2b2 > 0)
+        dm(i, j) = 1 - (sum_ab / std::sqrt(sum_a2b2));
+      else
+        dm(i, j) = 1;
     }
   }
   return dm;')
@@ -127,12 +132,28 @@ org_ann <- data.frame(id = 1:length(org), group = org)
 # Consider all other columns to represent various features
 feature_names <- col_names[col_names != "Organism"]
 
-sel_features <- as.matrix(features[ , feature_names])
-dist <- dist(sel_features, method = "euclidean")
-
-hc <- hclust(dist, method = "average")
-cls <- factor(cutree(hc, k = 10))
+for (m in 1:length(feature_names)) {
+  for (names in combn(feature_names, m, simplify = FALSE)) {
+    sel_features <- as.matrix(features[ , names])
+    
+    cat(names, "\n")
+    
+    # Euclidean
+    dist <- dist(sel_features, method = "euclidean")
+    hc <- hclust(dist, method = "average")
+    cls <- factor(cutree(hc, k = length(levels(org))))
+    sim <- vi(org, cls, length(org))
+    cat("Euclidean:", sim, "\n")
+    
+    # Cosine
+    dist <- cos_dist(sel_features)
+    hc <- hclust(dist, method = "average")
+    cls <- factor(cutree(hc, k = length(levels(org))))
+    sim <- vi(org, cls, length(org))
+    cat("Cosine:", sim, "\n")
+  }
+}
 
 # pdf("out/tree.pdf", 8, 15)
-print(ggtree(as.phylo(hc), aes(color = group), branch.length = "none") %<+% org_ann + theme(legend.position = "right"))
+# print(ggtree(as.phylo(hc), aes(color = group), branch.length = "none") %<+% org_ann + theme(legend.position = "right"))
 # dev.off()
