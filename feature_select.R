@@ -19,7 +19,10 @@ if (!"Organism" %in% col_names) {
 vi_P <- function(i, j, a, b, n) {
   return(sum(a == i & b == j) / n)
 }
-vi_I_pair <- function(i, j, a, b, n) {
+vi_I_pair <- function(i_j, a, b, n) {
+  i <- i_j[1]
+  j <- i_j[2]
+  
   P_1_2 = vi_P(i, j, a, b, n);
   
   P_1 = sum(a == i) / n;
@@ -33,8 +36,8 @@ vi_I_pair <- function(i, j, a, b, n) {
 }
 vi_I <- function(a, b, n) {
   i_j <- expand.grid(i = levels(a), j = levels(b))
-  pairs <- plyr::mdply(i_j, 'vi_I_pair', a, b, n)
-  return(sum(pairs$V1))
+  pairs <- apply(i_j, 1, 'vi_I_pair', a, b, n)
+  return(sum(pairs))
 }
 vi_H_single <- function(i, a, n) {
   P <- sum(a == i) / n
