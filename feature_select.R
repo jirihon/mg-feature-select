@@ -16,36 +16,70 @@ if (!"Organism" %in% col_names) {
   stop("Missing Organism column in input CSV file.")
 }
 
+#' One point of joint distribution of the random variables associated with two 
+#' clusterings.
+#' @see doi:10.1016/j.jmva.2006.11.013, chapter 3.
+#'
+#' @param i Cluster index from first clustering.
+#' @param j Cluster index from second clustering.
+#' @param a First clustering.
+#' @param b Second clustering.
+#' @param n Number of clustered items.
+#' @return P(A_i, B_j)
+#' 
 vi_P <- function(i, j, a, b, n) {
   return(sum(a == i & b == j) / n)
 }
-vi_I_pair <- function(i_j, a, b, n) {
-  i <- i_j[1]
-  j <- i_j[2]
-  
-  P_1_2 = vi_P(i, j, a, b, n);
-  
-  P_1 = sum(a == i) / n;
-  P_2 = sum(b == j) / n;
-  
-  if (P_1_2 > 0) {
-    return(P_1_2 * log(P_1_2 / (P_1 * P_2)))
-  } else {
-    return(0)
-  }
-}
+
+#' Mutual information between two clusterings.
+#' @see doi:10.1016/j.jmva.2006.11.013, chapter 3.
+#' 
+#' @param a First clustering.
+#' @param b Second clustering.
+#' @param n Number of clustered items.
+#' @return I(A, B)
+#' 
 vi_I <- function(a, b, n) {
   i_j <- expand.grid(i = levels(a), j = levels(b))
-  pairs <- apply(i_j, 1, 'vi_I_pair', a, b, n)
+  pairs <- apply(i_j, 1, function(i_j, a, b, n) {
+    i <- i_j[1]
+    j <- i_j[2]
+    
+    P_1_2 = vi_P(i, j, a, b, n);
+    P_1 = sum(a == i) / n;
+    P_2 = sum(b == j) / n;
+    
+    if (P_1_2 > 0) {
+      return(P_1_2 * log(P_1_2 / (P_1 * P_2)))
+    } else {
+      return(0)
+    }
+  }, a, b, n)
   return(sum(pairs))
 }
-vi_H_single <- function(i, a, n) {
-  P <- sum(a == i) / n
-  return(-P * log(P))
-}
+
+#' Entropy associated with given clustering.
+#' @see doi:10.1016/j.jmva.2006.11.013, chapter 3.
+#' 
+#' @param a Clustering.
+#' @param n Number of clustered items.
+#' @return Clustering entropy H(A)
+#' 
 vi_H <- function(a, n) {
-  return(sum(sapply(levels(a), 'vi_H_single', a, n)))
+  return(sum(sapply(levels(a), function(i, a, n) {
+    P <- sum(a == i) / n
+    return(-P * log(P))
+  }, a, n)))
 }
+
+#' Variation of information.
+#' @see doi:10.1016/j.jmva.2006.11.013, chapter 3.
+#' 
+#' @param a First clustering.
+#' @param b Second clustering.
+#' @param n Number of clustered items.
+#' @return VI(A, B)
+#' 
 vi <- function(a, b, n) {
   return(vi_H(a, n) + vi_H(b, n) - 2 * vi_I(a, b, n))
 }
