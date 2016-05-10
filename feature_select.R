@@ -202,7 +202,7 @@ load_features <- function(file) {
 #' @return Evaluations of all feature combinations.
 #'
 eval_all_feature_comb <- function(
-  features, min_features = 3, max_features = .Machine$integer.max,
+  features, min_features = 1, max_features = .Machine$integer.max,
   parallel = FALSE)
 {
   col_names <- names(features)
@@ -261,14 +261,14 @@ find_best_features <- function(feat_evals, metric) {
 #' @param file Output file.
 #' 
 plot_tree <- function(tree, ref, file) {
-  library(ape)
   library(ggtree)
+  library(ape)
   
-  ref_ann <- data.frame(id = 1:length(ref), group = ref)
+  ref_ann <- data.frame(id = 1:length(ref), group = factor(ref))
   
   pdf(file, 10, 20)
   print(ggtree(as.phylo(tree), aes(color = group), branch.length = 'none')
-        %<+% org_ann + theme(legend.position = "right"))
+        %<+% ref_ann + theme(legend.position = "right"))
   dev.off()
 }
 

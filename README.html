@@ -118,16 +118,26 @@ $(document).ready(function () {
 </div>
 
 
-<div id="mg-feature-select" class="section level1">
-<h1>mg-feature-select</h1>
-<p>R/Bioconductor script for hierachical clustering by various sequence features.</p>
+<div id="metagenomic-feature-select" class="section level1">
+<h1>Metagenomic Feature Select</h1>
+<p>R/Bioconductor script for hierachical clustering by various DNA sequence features and measuring its similarity with reference clustering.</p>
 <div id="how-to-run" class="section level2">
 <h2>How to Run</h2>
 <ol style="list-style-type: decimal">
 <li><p>Install the latest stable version of R (3.3.0) from <a href="http://mirrors.nic.cz/R/">CRAN</a>.</p></li>
-<li><p>Install Biconductor and packages <code>Rcpp</code>, <code>inline</code> and <code>ggtree</code>.</p>
+<li><p>Run the latest R and install packages <code>Rcpp</code>, <code>inline</code>, <code>fastcluster</code> and <code>ggtree</code> using Bioconductor installer.</p>
 <pre class="r"><code>source(&quot;https://bioconductor.org/biocLite.R&quot;)
-biocLite(c(&quot;Rcpp&quot;, &quot;inline&quot;, &quot;ggtree&quot;))</code></pre></li>
+biocLite(c(&quot;Rcpp&quot;, &quot;inline&quot;, &quot;fastcluster&quot;, &quot;ggtree&quot;))</code></pre></li>
+<li><p>Download the script <code>feature_select.R</code> from GitHub into current working folder and load it into R.</p>
+<pre class="r"><code>source(&quot;feature_select.R&quot;)</code></pre></li>
+<li><p>Use functions <code>load_features</code>, <code>eval_all_feature_comb</code>, <code>find_best_features</code> and <code>plot_tree</code> to run the analysis and visualize the results. The most time consuming function <code>eval_all_feature_comb</code> can be run in parallel mode (set <code>parallel</code> option to <code>TRUE</code>). See the following example:</p>
+<pre class="r"><code>features &lt;- load_features(&quot;features.csv&quot;)
+res &lt;- eval_all_feature_comb(features, min_features = 2, max_features = 6, parallel = TRUE)
+best_euc &lt;- find_best_features(res, 'euc') # for euclidean distance
+best_cos &lt;- find_best_features(res, 'cos') # for cosine dissimilarity
+plot_tree(best_euc$tree, features$Organism, &quot;tree_euc.pdf&quot;)
+plot_tree(best_cos$tree, features$Organism, &quot;tree_cos.pdf&quot;)</code></pre></li>
+<li><p>Feel free to inspect the structure of <code>best_euc</code> and <code>best_cos</code> variables. It is just a list of three items: <code>features</code> contains a vector of used features, <code>k</code> is a cutoff value (number of clusters) of the hierarchical clustering tree, that gave the best Variantion of Information (VI) with reference clustering and <code>vi</code> contains the best VI value.</p></li>
 </ol>
 </div>
 </div>
