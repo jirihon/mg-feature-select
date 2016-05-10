@@ -1,9 +1,9 @@
-
-library(ggtree)
-library(ape)
-library(parallel)
-
-setwd("/home/xhonji01/Projekty/MG/feature_select")
+##
+# Feature selection for clustering of metagenomics data.
+#
+# Author: Jiri Hon <ihon@fit.vutbr.cz>
+# Date: 2016/05/15
+#
 
 #' One point of joint distribution of the random variables associated with two 
 #' clusterings.
@@ -111,16 +111,77 @@ cos_dist <- function(x) {
     }
   }
   return dm;')
-  return(as.dist(cos_dist_c(x)))
+  d <- as.dist(cos_dist_c(x))
+  attr(d, 'method') <- 'cosine'
+  return(d)
 }
 
-#' Select best features for hierarchical clustering.
+#' Find the best tree cutoff.
 #' 
-#' @param file Input CSV file with features and reference marking.
-#' @param min_features Minimal number of features.
-#' @param max_features Maximal number of features.
+#' @param hc Clustering tree.
+#' @param org Reference organism mapping.
+#' @return Best cutoff (number of clusters) and corresponding VI.
 #'
-feature_select <- function(file, min_features = 3, max_features = NULL) {
+find_best_cutoff <- function(hc, org) {
+  best_vi <- .Machine$double.xmax
+  best_k <- 0
+  
+  for (k in 1:(2*length(levels(org)))) {
+    cls <- factor(cutree(hc, k = k))
+    sim <- vi(org, cls, length(org))
+    if (sim < best_vi) {
+      best_vi <- sim
+      best_k <- k
+    }
+  }
+  return(list(k = best_k, vi = best_vi))
+}
+
+#' Evaluate specific distance function on selected features.
+#' 
+#' @param sel_features Matrix of selected features.
+#' @param dist_fn Distance function.
+#' @param org Reference organism marking.
+#' @return Clustering tree, cutoff and VI.
+#' 
+dist_eval <- function(sel_features, dist_fn, org) {
+  library(fastcluster)
+  dist <- do.call(dist_fn, list(sel_features))
+  hc <- hclust(dist, method = "average")
+  cutoff <- find_best_cutoff(hc, org)
+  return(c(tree = list(hc), cutoff))
+}
+
+#' Evaluate specific feature combination.
+#' 
+#' @param names Combination of features.
+#' @return Euc. VI and Cos. VI.
+#' 
+eval_feature_comb <- function(names, features, org) {
+  sel_features <- as.matrix(features[ , names])
+  euc_res <- dist_eval(sel_features, dist, org)
+  cos_res <- dist_eval(sel_features, cos_dist, org)
+  res <- list(features = names, euc = euc_res, cos = cos_res)
+  print_feature_select_eval(res)
+  return(res)
+}
+
+#' Print feature evaluation result.
+#' 
+#' @param res Result of feature evaluation.
+#' 
+print_feature_select_eval <- function(res) {
+  cat(paste(res$features, collapse = " "), "\n")
+  cat(sprintf("* EUC: k = %d, vi = %f", res$euc$k, res$euc$vi), "\n")
+  cat(sprintf("* COS: k = %d, vi = %f", res$cos$k, res$cos$vi), "\n")
+}
+
+#' Load features from file
+#' 
+#' @param file Input CSV file.
+#' @return Features.
+#' 
+load_features <- function(file) {
   features <- read.csv(file)
   col_names <- names(features)
   
@@ -130,6 +191,21 @@ feature_select <- function(file, min_features = 3, max_features = NULL) {
   if (!"Organism" %in% col_names) {
     stop("Missing Organism column in input CSV file.")
   }
+  return(features)
+}
+
+#' Evaluate all feature combinations for hierarchical clustering.
+#' 
+#' @param file Input CSV file with features and reference marking.
+#' @param min_features Minimal number of features.
+#' @param max_features Maximal number of features.
+#' @return Evaluations of all feature combinations.
+#'
+eval_all_feature_comb <- function(
+  features, min_features = 3, max_features = .Machine$integer.max,
+  parallel = FALSE)
+{
+  col_names <- names(features)
   # Pick reference organism marking from feature table
   org <- factor(features$Organism)
   org_ann <- data.frame(id = 1:length(org), group = org)
@@ -140,49 +216,74 @@ feature_select <- function(file, min_features = 3, max_features = NULL) {
   if (length(feature_names) < min_features) {
     stop("Not enough features.")
   }
-  if (is.null(max_features)) {
-    max_features <- length(feature_names)
-  }
   if (max_features < min_features) {
     stop("Invalid specification of maximum and minimum features.")
   }
-  
   # Generate all feature combinations
   max_features <- min(max_features, length(feature_names))
-  feature_comb <- unlist(lapply(min_features:max_features, combn,
-                                x = feature_names, simplify = FALSE),
-                         recursive = FALSE)
+  feature_comb <- unlist(
+    lapply(min_features:max_features, combn, x = feature_names, simplify = FALSE),
+    recursive = FALSE)
   
-  # n_cores <- detectCores()
-  # cl <- makeCluster(n_cores, outfile = "");
-  # clusterExport(cl, c("features", "org", "cos_dist", "vi", "vi_H", "vi_I", "vi_P"))
+  if (parallel) {
+    library(parallel)
+    cl <- makeCluster(detectCores()-1, outfile = "");
+    clusterExport(cl, c("cos_dist", "dist_eval", "print_feature_select_eval",
+                        "find_best_cutoff", "vi", "vi_H", "vi_I", "vi_P"))
+    res <- parLapply(cl, feature_comb, eval_feature_comb, features, org)
+  } else {
+    res <- lapply(feature_comb, eval_feature_comb, features, org)
+  }
+  return(res)
+}
+
+#' Find best features for specific metric.
+#' 
+#' @param feat_evals Feature evaluations.
+#' @param metric
+#' @return Best features, tree, cutoff and VI.
+#' 
+find_best_features <- function(feat_evals, metric) {
+  min_vi <- .Machine$double.xmax
+  best <- NULL
+  for (res in feat_evals) {
+    if (res[[metric]]$vi < min_vi) {
+      best <- c(list(features = res$features), res[[metric]])
+    }
+  }
+  return(best)
+}
+
+#' Plot clustering tree colored by reference clustering.
+#' 
+#' @param tree Clustering tree.
+#' @param ref Reference clustering.
+#' @param file Output file.
+#' 
+plot_tree <- function(tree, ref, file) {
+  library(ape)
+  library(ggtree)
   
-  res <- lapply(feature_comb, function(names) {
-    library(fastcluster)
-    cat(names, "\n")
-    
-    sel_features <- as.matrix(features[ , names])
-    
-    # Euclidean
-    dist <- dist(sel_features, method = "euclidean")
-    hc <- hclust(dist, method = "average")
-    cls <- factor(cutree(hc, k = length(levels(org))))
-    euc_sim <- vi(org, cls, length(org))
-    
-    # Cosine
-    dist <- cos_dist(sel_features)
-    hc <- hclust(dist, method = "average")
-    cls <- factor(cutree(hc, k = length(levels(org))))
-    cos_sim <- vi(org, cls, length(org))
-    
-    cat("Euclidean:", euc_sim, "Cosine:", cos_sim, "\n")
-    
-    return(c(euc_sim, cos_sim))
-  })
+  ref_ann <- data.frame(id = 1:length(ref), group = ref)
   
-  resm <- matrix(unlist(x), nrow = 2)
+  pdf(file, 10, 20)
+  print(ggtree(as.phylo(tree), aes(color = group), branch.length = 'none')
+        %<+% org_ann + theme(legend.position = "right"))
+  dev.off()
+}
+
+#' Plot 2D projection of clustering for comparison with reference.
+#' 
+#' @param x X values
+#' @param y Y values
+#' @param cls Clustering.
+#' @param file Output file.
+#' 
+plot_clustering_2d <- function(x, y, cls, file) {
+  library(ggplot2)
   
-  # pdf("out/tree.pdf", 8, 15)
-  # print(ggtree(as.phylo(hc), aes(color = group), branch.length = "none") %<+% org_ann + theme(legend.position = "right"))
-  # dev.off()
+  data <- data.frame(x = x, y = y, group = factor(cls))
+  pdf(file, 10, 8)
+  print(ggplot(data, aes(x = x, y = y, color = group)) + geom_point())
+  dev.off()
 }
