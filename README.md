@@ -29,7 +29,7 @@ R/Bioconductor script for hierachical clustering by various DNA sequence feature
     plot_tree(best_cos$tree, features$Organism, "tree_cos.pdf")
     ```
 
-    ![Figure 1: Clustering trees for euclidean (left) and cosine (right) distance.](https://raw.githubusercontent.com/jirihon/mg-feature-select/master/fig/tree_euc_cos.png)
+    ![Clustering trees for euclidean (left) and cosine (right) distance.](https://raw.githubusercontent.com/jirihon/mg-feature-select/master/fig/tree_euc_cos.png)
 
 5. Feel free to inspect the structure of `best_euc` and `best_cos` variables. It is just a list of three items: `features` contains a vector of used features, `k` is a cutoff value (number of clusters) of the hierarchical clustering tree, that gave the best Variantion of Information (VI) with reference clustering and `vi` contains the best VI value.
 
@@ -41,3 +41,5 @@ R/Bioconductor script for hierachical clustering by various DNA sequence feature
     best_cls <- cutree(best_euc$tree, best_euc$k)
     plot_clustering_2d(features$HP1_aktivita, features$HP2_mobilita, best_cls, "2d_euc.pdf")
     ```
+    
+    ![Comparison of 2D projections](https://raw.githubusercontent.com/jirihon/mg-feature-select/master/fig/2d.png)
