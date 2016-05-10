@@ -1,5 +1,5 @@
 ##
-# Feature selection for clustering of metagenomics data.
+# Feature selection for clustering of metagenomic data.
 #
 # Author: Jiri Hon <ihon@fit.vutbr.cz>
 # Date: 2016/05/15
