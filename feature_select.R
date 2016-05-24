@@ -107,7 +107,7 @@ cos_dist <- function(x) {
       if (sum_a2b2 > 0)
         dm(i, j) = 1 - (sum_ab / std::sqrt(sum_a2b2));
       else
-        dm(i, j) = 1;
+        dm(i, j) = 2;
     }
   }
   return dm;')
